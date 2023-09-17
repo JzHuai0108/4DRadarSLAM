@@ -57,8 +57,12 @@ public:
 
     initializeTransformation();
     initializeParams();
+    if (pointCloudTopic.find("ars548") != std::string::npos) {
+      points_sub = nh.subscribe(pointCloudTopic, 64, &PreprocessingNodelet::cloud2_callback, this);
+    } else {
+      points_sub = nh.subscribe(pointCloudTopic, 64, &PreprocessingNodelet::cloud_callback, this);
+    }
 
-    points_sub = nh.subscribe(pointCloudTopic, 64, &PreprocessingNodelet::cloud_callback, this);
     imu_sub = nh.subscribe(imuTopic, 1, &PreprocessingNodelet::imu_callback, this);
     command_sub = nh.subscribe("/command", 10, &PreprocessingNodelet::command_callback, this);
 
@@ -301,24 +305,27 @@ private:
     }
 
     //********** Publish PointCloud2 Format Raw Cloud **********
-    sensor_msgs::PointCloud2 pc2_raw_msg;
-    pcl::toROSMsg(*radarcloud_raw, pc2_raw_msg);
-    pc2_raw_msg.header.stamp = eagle_msg->header.stamp;
-    pc2_raw_msg.header.frame_id = baselinkFrame;
-    pc2_raw_pub.publish(pc2_raw_msg);
+    sensor_msgs::PointCloud2::Ptr pc2_raw_msg = boost::make_shared<sensor_msgs::PointCloud2>();
+    pcl::toROSMsg(*radarcloud_raw, *pc2_raw_msg);
+    pc2_raw_msg->header.stamp = eagle_msg->header.stamp;
+    pc2_raw_msg->header.frame_id = baselinkFrame;
+    pc2_raw_pub.publish(*pc2_raw_msg);
+    cloud2_callback(pc2_raw_msg);
+  }
 
+  void cloud2_callback(const sensor_msgs::PointCloud2::ConstPtr&  pc2_raw_msg) {
     //********** Ego Velocity Estimation **********
     Eigen::Vector3d v_r, sigma_v_r;
     sensor_msgs::PointCloud2 inlier_radar_msg, outlier_radar_msg;
     clock_t start_ms = clock();
-    if (estimator.estimate(pc2_raw_msg, v_r, sigma_v_r, inlier_radar_msg, outlier_radar_msg))
+    if (estimator.estimate(*pc2_raw_msg, v_r, sigma_v_r, inlier_radar_msg, outlier_radar_msg))
     {
         clock_t end_ms = clock();
         double time_used = double(end_ms - start_ms) / CLOCKS_PER_SEC;
         egovel_time.push_back(time_used);
         
         geometry_msgs::TwistWithCovarianceStamped twist;
-        twist.header.stamp         = pc2_raw_msg.header.stamp;
+        twist.header.stamp         = pc2_raw_msg->header.stamp;
         twist.twist.twist.linear.x = v_r.x();
         twist.twist.twist.linear.y = v_r.y();
         twist.twist.twist.linear.z = v_r.z();
@@ -335,7 +342,10 @@ private:
     else{;}
 
     pcl::PointCloud<PointT>::Ptr radarcloud_inlier( new pcl::PointCloud<PointT> );
-    pcl::fromROSMsg (inlier_radar_msg, *radarcloud_inlier);
+    pcl::fromROSMsg(inlier_radar_msg, *radarcloud_inlier);
+
+    pcl::PointCloud<PointT>::Ptr radarcloud_xyzi( new pcl::PointCloud<PointT> );
+    pcl::fromROSMsg(*pc2_raw_msg, *radarcloud_xyzi);
 
     pcl::PointCloud<PointT>::ConstPtr src_cloud;
     if (enable_dynamic_object_removal)

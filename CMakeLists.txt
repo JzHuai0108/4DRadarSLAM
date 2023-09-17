@@ -25,6 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
   fast_gicp
   image_transport
   cv_bridge
+  barometer_bmp388
   # rosopencv
 )
 catkin_python_setup()
@@ -84,7 +85,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES radar_graph_slam_nodelet
 #  CATKIN_DEPENDS pcl_ros roscpp sensor_msgs
-  DEPENDS system_lib GTSAM OpenCV
+  DEPENDS OpenCV
 )
 
 ###########
@@ -95,7 +96,6 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
   ${GTSAM_INCLUDE_DIR}
-  "~/sensor_ws/devel/include"
 )
 
 # nodelets
